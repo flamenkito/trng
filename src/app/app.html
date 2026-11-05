@@ -1,0 +1,34 @@
+<main class="shell">
+  <header class="header">
+    <h1>Infinite Noise TRNG Visualizer</h1>
+    <span class="badge">MILESTONE 1 — SKELETON</span>
+  </header>
+
+  <section class="card">
+    <h2>Backend status (Rust command)</h2>
+    @if (status(); as s) {
+      <dl class="status-grid">
+        <dt>App</dt>
+        <dd>{{ s.appName }}</dd>
+        <dt>Backend version</dt>
+        <dd>{{ s.appVersion }}</dd>
+        <dt>Tauri version</dt>
+        <dd>{{ s.tauriVersion }}</dd>
+        <dt>Status</dt>
+        <dd><span class="dot"></span>{{ s.status }}</dd>
+      </dl>
+    } @else {
+      <p>Loading backend status…</p>
+    }
+    <button (click)="refresh()" type="button">Refresh</button>
+  </section>
+
+  <section class="card">
+    <h2>Test event (Rust → Angular)</h2>
+    @if (testEvent(); as e) {
+      <p class="event-ok">✔ {{ e.message }} @ {{ e.timestampMs }}</p>
+    } @else {
+      <p>Waiting for event…</p>
+    }
+  </section>
+</main>
