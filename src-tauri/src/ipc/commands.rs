@@ -37,6 +37,50 @@ pub fn request_test_event(app: tauri::AppHandle) {
     super::events::emit_test_event_now(&app);
 }
 
+/// Result of starting or stopping a capture, returned to the frontend.
+#[derive(Debug, serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureActionResult {
+    pub dir: String,
+    pub bytes_written: u64,
+}
+
+fn captures_root(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    use tauri::Manager;
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("cannot resolve app data dir: {e}"))?;
+    Ok(base.join("captures"))
+}
+
+/// Starts a lossless binary capture. Fails visibly if one is already active.
+#[tauri::command]
+pub fn start_capture(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::state::StreamState>,
+) -> Result<CaptureActionResult, String> {
+    let root = captures_root(&app)?;
+    let dir = state.capture.start(&root)?;
+    Ok(CaptureActionResult {
+        dir: dir.display().to_string(),
+        bytes_written: 0,
+    })
+}
+
+/// Stops the active capture: flushes `stream.bin` and finalizes
+/// `metadata.json` with the exact byte count and `complete: true`.
+#[tauri::command]
+pub fn stop_capture(
+    state: tauri::State<'_, crate::state::StreamState>,
+) -> Result<CaptureActionResult, String> {
+    let (dir, bytes_written) = state.capture.stop()?;
+    Ok(CaptureActionResult {
+        dir: dir.display().to_string(),
+        bytes_written,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

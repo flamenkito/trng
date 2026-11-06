@@ -29,6 +29,33 @@
       @if (s.lastError) {
         <p class="error-banner">⚠ {{ s.lastError }}</p>
       }
+      <div class="capture-row">
+        @if (s.captureStatus === 'active') {
+          <button class="danger" (click)="stopCapture()" type="button">
+            ■ Stop capture
+          </button>
+          <span class="capture-info">
+            Recording — {{ s.captureBytesWritten.toLocaleString('en-US') }} bytes
+          </span>
+        } @else {
+          <button (click)="startCapture()" type="button" [disabled]="s.deviceStatus !== 'streaming'">
+            ● Start capture
+          </button>
+          <span class="capture-info">
+            @if (s.captureStatus === 'error') {
+              <span class="bad">capture failed</span>
+            } @else {
+              idle
+            }
+          </span>
+        }
+      </div>
+      @if (s.captureDir) {
+        <p class="capture-dir">{{ s.captureDir }}</p>
+      }
+      @if (s.captureError) {
+        <p class="error-banner">⚠ {{ s.captureError }}</p>
+      }
     } @else {
       <p>Waiting for stream status…</p>
     }

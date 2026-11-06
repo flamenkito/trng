@@ -203,6 +203,7 @@ pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
                     // The chunk is deliberately kept alive until all future
                     // consumers (statistics, capture) have seen it.
                     state.counters.record_chunk(chunk.data.len());
+                    state.capture.feed(&chunk.data);
                 }
             })
             .expect("spawn trng-processor"));
@@ -217,22 +218,48 @@ pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
         threads.push(std::thread::Builder::new()
             .name("trng-ticker".into())
             .spawn(move || {
-                let mut last_tick = Instant::now();
+                // Rate smoothing: the TRNG's whitened output arrives in
+                // bursts (the infnoise sponge squeezes in blocks), so a
+                // single 100 ms window is often 0 followed by a spike.
+                // The displayed rate is the exact byte count over a 1 s
+                // sliding window — a sum of real bytes over real elapsed
+                // time, never a sampled estimate.
+                let mut window: std::collections::VecDeque<(Instant, u64)> =
+                    std::collections::VecDeque::new();
+                const RATE_WINDOW: Duration = Duration::from_secs(1);
                 while !shutdown.load(Ordering::Relaxed) {
                     std::thread::sleep(TICK_INTERVAL);
                     let now = Instant::now();
-                    let elapsed = now.duration_since(last_tick).as_secs_f64();
-                    last_tick = now;
                     let bytes = state.counters.swap_bytes_since_tick();
+                    window.push_back((now, bytes));
+                    while let Some((front_instant, _)) = window.front() {
+                        if now.duration_since(*front_instant) > RATE_WINDOW {
+                            window.pop_front();
+                        } else {
+                            break;
+                        }
+                    }
+                    let window_bytes: u64 = window.iter().map(|(_, b)| b).sum();
+                    // Bytes counted at tick T were received during the tick
+                    // interval ending at T, so the covered span is
+                    // (now - oldest tick) + one tick interval.
+                    let window_elapsed = window
+                        .front()
+                        .map(|(t, _)| (now.duration_since(*t) + TICK_INTERVAL).as_secs_f64())
+                        .unwrap_or(TICK_INTERVAL.as_secs_f64());
                     let event = StreamStatusEvent {
                         device_status: state.status(),
                         source: state.source(),
                         total_bytes_received: state.counters.total_bytes_received(),
-                        bytes_per_second: bytes as f64 / elapsed,
+                        bytes_per_second: window_bytes as f64 / window_elapsed.max(f64::EPSILON),
                         application_dropped_bytes: state.counters.application_dropped_bytes(),
                         chunks_processed: state.counters.chunks_processed(),
                         reconnect_count: state.reconnect_count(),
                         last_error: state.last_error(),
+                        capture_status: state.capture.status(),
+                        capture_bytes_written: state.capture.bytes_written(),
+                        capture_dir: state.capture.dir().map(|p| p.display().to_string()),
+                        capture_error: state.capture.last_error(),
                     };
                     if emit_stream_status(&app, &event).is_err() {
                         // Frontend not ready yet; next tick will carry the state.

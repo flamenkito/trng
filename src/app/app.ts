@@ -27,6 +27,14 @@ export class App implements OnInit {
     void this.tauri.loadBackendStatus();
   }
 
+  protected startCapture(): void {
+    void this.trng.startCapture().catch((e: unknown) => console.error(e));
+  }
+
+  protected stopCapture(): void {
+    void this.trng.stopCapture().catch((e: unknown) => console.error(e));
+  }
+
   protected formatRate(bytesPerSecond: number): string {
     if (bytesPerSecond >= 1024) {
       return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`;

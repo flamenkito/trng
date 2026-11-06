@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
 use serde::Serialize;
 
+use crate::capture::writer::CaptureWriter;
 use crate::stream::counters::StreamCounters;
 
 /// Device/stream state exposed to the frontend.
@@ -45,6 +46,7 @@ impl DeviceStatus {
 pub struct StreamState {
     status: AtomicU8,
     pub counters: StreamCounters,
+    pub capture: CaptureWriter,
     reconnect_count: AtomicU64,
     source: Mutex<String>,
     last_error: Mutex<Option<String>>,
@@ -55,6 +57,7 @@ impl StreamState {
         Self {
             status: AtomicU8::new(DeviceStatus::Disconnected.as_u8()),
             counters: StreamCounters::default(),
+            capture: CaptureWriter::new(),
             reconnect_count: AtomicU64::new(0),
             source: Mutex::new("none".to_string()),
             last_error: Mutex::new(None),

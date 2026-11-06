@@ -1,4 +1,5 @@
 mod ipc;
+mod capture;
 mod device;
 mod state;
 mod stream;
@@ -29,7 +30,9 @@ pub fn run() {
     })
     .invoke_handler(tauri::generate_handler![
       ipc::commands::get_backend_status,
-      ipc::commands::request_test_event
+      ipc::commands::request_test_event,
+      ipc::commands::start_capture,
+      ipc::commands::stop_capture
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")

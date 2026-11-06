@@ -1,4 +1,5 @@
 import type { DeviceStatus } from './device-status';
+import type { CaptureStatus } from './capture-status';
 
 /**
  * Snapshot of derived stream state, emitted by Rust at ~10 Hz.
@@ -16,4 +17,8 @@ export interface StreamStatus {
   chunksProcessed: number;
   reconnectCount: number;
   lastError: string | null;
+  captureStatus: CaptureStatus;
+  captureBytesWritten: number;
+  captureDir: string | null;
+  captureError: string | null;
 }

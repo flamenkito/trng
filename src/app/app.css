@@ -136,6 +136,42 @@
   font-size: 13px;
 }
 
+.capture-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #262f38;
+}
+
+.capture-info {
+  color: #7c8a96;
+  font-size: 13px;
+}
+
+.capture-dir {
+  margin: 8px 0 0;
+  color: #5f6e7a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+button.danger {
+  background: #3a1d1d;
+  border-color: #6b2c2c;
+}
+
+button.danger:hover {
+  background: #4a2424;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 button {
   background: #223041;
   color: #d7dde3;
