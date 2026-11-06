@@ -11,16 +11,31 @@ use super::ByteSource;
 
 pub const SOURCE_NAME: &str = "infnoise (whitened)";
 
+pub const RAW_SOURCE_NAME: &str = "infnoise (raw source)";
+
 /// Reads the Infinite Noise TRNG through the `infnoise` executable.
 pub struct InfnoiseSource {
     child: Child,
     stdout: ChildStdout,
+    name: &'static str,
 }
 
 impl InfnoiseSource {
     /// Spawns `infnoise` with binary whitened output on stdout.
     pub fn spawn() -> Result<Self, String> {
+        Self::spawn_inner(false)
+    }
+
+    /// Spawns `infnoise --raw`: the unwhitened noise source. The raw source
+    /// is NOT expected to be uniformly distributed — it is a separate
+    /// analysis mode, not a drop-in replacement for whitened output.
+    pub fn spawn_raw() -> Result<Self, String> {
+        Self::spawn_inner(true)
+    }
+
+    fn spawn_inner(raw: bool) -> Result<Self, String> {
         let mut child = Command::new("infnoise")
+            .args(if raw { vec!["--raw"] } else { vec![] })
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
@@ -31,7 +46,11 @@ impl InfnoiseSource {
             .take()
             .ok_or_else(|| "failed to capture infnoise stdout".to_string())?;
 
-        Ok(Self { child, stdout })
+        Ok(Self {
+            child,
+            stdout,
+            name: if raw { RAW_SOURCE_NAME } else { SOURCE_NAME },
+        })
     }
 }
 
@@ -41,7 +60,7 @@ impl ByteSource for InfnoiseSource {
     }
 
     fn describe(&self) -> &str {
-        SOURCE_NAME
+        self.name
     }
 }
 

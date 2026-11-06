@@ -1,6 +1,6 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { UpperCasePipe } from '@angular/common';
-import { TrngService } from '../core/trng.service';
+import { TrngService, type SourceRequest } from '../core/trng.service';
 import { TauriService } from '../core/tauri.service';
 import { DeviationCanvasComponent } from '../components/deviation-canvas/deviation-canvas.component';
 import { HistoryHeatmapComponent } from '../components/history-heatmap/history-heatmap.component';
@@ -33,6 +33,18 @@ export class LivePageComponent implements OnInit {
   /** UI-only state: which rolling window feeds the graphs. */
   protected readonly selectedWindowMs = signal(1000);
 
+  /** Path of a capture file to replay (UI-only state). */
+  protected readonly replayPath = signal('');
+
+  /** Which source spec is active, for button highlighting. */
+  protected readonly activeSource = computed(() => {
+    const source = this.stream()?.source ?? '';
+    if (source.startsWith('replay:')) return 'replay';
+    if (source.startsWith('testpattern')) return 'testPattern';
+    if (source.startsWith('infnoise (raw')) return 'infnoiseRaw';
+    return 'infnoise';
+  });
+
   /** Frame for the selected window; null until enough samples exist. */
   protected readonly selectedFrame = computed(() => {
     const s = this.stream();
@@ -63,5 +75,20 @@ export class LivePageComponent implements OnInit {
 
   protected stopCapture(): void {
     void this.trng.stopCapture().catch((e: unknown) => console.error(e));
+  }
+
+  protected switchSource(request: SourceRequest): void {
+    void this.trng.setSource(request).catch((e: unknown) => console.error(e));
+  }
+
+  protected onReplayPath(event: Event): void {
+    this.replayPath.set((event.target as HTMLInputElement).value);
+  }
+
+  protected startReplay(): void {
+    const path = this.replayPath().trim();
+    if (path) {
+      this.switchSource({ type: 'replay', path });
+    }
   }
 }

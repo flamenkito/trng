@@ -75,6 +75,10 @@ pub struct StreamStatusEvent {
     pub capture_bytes_written: u64,
     pub capture_dir: Option<String>,
     pub capture_error: Option<String>,
+    /// Current depth of the bounded reader → processor channel. Should stay
+    /// near 0; approaching capacity signals consumer lag and is surfaced as
+    /// an explicit critical state rather than silently dropping bytes.
+    pub pending_chunks: u64,
     /// Distribution counts for every configured rolling window.
     pub windows: Vec<WindowStats>,
 }

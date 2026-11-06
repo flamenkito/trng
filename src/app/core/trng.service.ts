@@ -8,6 +8,13 @@ export interface CaptureActionResult {
   bytesWritten: number;
 }
 
+/** Runtime-selectable byte source; all feed the same statistics pipeline. */
+export type SourceRequest =
+  | { type: 'infnoise' }
+  | { type: 'infnoiseRaw' }
+  | { type: 'testPattern' }
+  | { type: 'replay'; path: string };
+
 /**
  * Consumes `stream-status` snapshots from the Rust stream pipeline and
  * exposes them as signals.
@@ -29,6 +36,11 @@ export class TrngService {
   /** Stops the capture; resolves with the directory and exact byte count. */
   async stopCapture(): Promise<CaptureActionResult> {
     return await invoke<CaptureActionResult>('stop_capture');
+  }
+
+  /** Switches the byte source (live TRNG / test pattern / replay capture). */
+  async setSource(request: SourceRequest): Promise<void> {
+    await invoke('set_source', { request });
   }
 
   async subscribe(): Promise<void> {

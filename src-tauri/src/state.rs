@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use serde::Serialize;
 
 use crate::capture::writer::CaptureWriter;
+use crate::device::SourceSpec;
 use crate::rolling::histogram::WindowStats;
 use crate::stream::counters::StreamCounters;
 
@@ -50,9 +51,17 @@ pub struct StreamState {
     pub capture: CaptureWriter,
     reconnect_count: AtomicU64,
     source: Mutex<String>,
+    /// Conceptual data mode of the active source ("whitened", "raw", ...).
+    source_mode: Mutex<String>,
     last_error: Mutex<Option<String>>,
     /// Latest per-window distribution snapshots, refreshed by the processor.
     windows: Mutex<Vec<WindowStats>>,
+    /// Which source the reader should open. Mutable at runtime (LIVE /
+    /// TEST PATTERN / REPLAY all share one pipeline).
+    source_spec: Mutex<SourceSpec>,
+    /// Current depth of the bounded reader → processor channel (backpressure
+    /// gauge; surfaced prominently if it approaches capacity).
+    pending_chunks: AtomicU64,
 }
 
 impl StreamState {
@@ -63,8 +72,11 @@ impl StreamState {
             capture: CaptureWriter::new(),
             reconnect_count: AtomicU64::new(0),
             source: Mutex::new("none".to_string()),
+            source_mode: Mutex::new("whitened".to_string()),
             last_error: Mutex::new(None),
             windows: Mutex::new(Vec::new()),
+            source_spec: Mutex::new(SourceSpec::Infnoise),
+            pending_chunks: AtomicU64::new(0),
         }
     }
 
@@ -76,6 +88,24 @@ impl StreamState {
 
     pub fn windows(&self) -> Vec<WindowStats> {
         self.windows.lock().map(|g| g.clone()).unwrap_or_default()
+    }
+
+    pub fn source_spec(&self) -> SourceSpec {
+        self.source_spec.lock().map(|g| g.clone()).unwrap_or(SourceSpec::Infnoise)
+    }
+
+    pub fn set_source_spec(&self, spec: SourceSpec) {
+        if let Ok(mut guard) = self.source_spec.lock() {
+            *guard = spec;
+        }
+    }
+
+    pub fn pending_chunks(&self) -> u64 {
+        self.pending_chunks.load(Ordering::Relaxed)
+    }
+
+    pub fn set_pending_chunks(&self, n: u64) {
+        self.pending_chunks.store(n, Ordering::Relaxed);
     }
 
     pub fn status(&self) -> DeviceStatus {
@@ -102,6 +132,16 @@ impl StreamState {
 
     pub fn source(&self) -> String {
         self.source.lock().map(|g| g.clone()).unwrap_or_default()
+    }
+
+    pub fn set_source_mode(&self, mode: impl Into<String>) {
+        if let Ok(mut guard) = self.source_mode.lock() {
+            *guard = mode.into();
+        }
+    }
+
+    pub fn source_mode(&self) -> String {
+        self.source_mode.lock().map(|g| g.clone()).unwrap_or_default()
     }
 
     pub fn set_error(&self, message: impl Into<String>) {

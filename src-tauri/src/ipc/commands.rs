@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::device::SourceSpec;
+
 /// Static status payload returned to Angular on startup.
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -61,7 +63,7 @@ pub fn start_capture(
     state: tauri::State<'_, crate::state::StreamState>,
 ) -> Result<CaptureActionResult, String> {
     let root = captures_root(&app)?;
-    let dir = state.capture.start(&root)?;
+    let dir = state.capture.start(&root, &state.source_mode())?;
     Ok(CaptureActionResult {
         dir: dir.display().to_string(),
         bytes_written: 0,
@@ -79,6 +81,40 @@ pub fn stop_capture(
         dir: dir.display().to_string(),
         bytes_written,
     })
+}
+
+/// Runtime-selectable byte source. The reader drops its current source and
+/// opens the new spec on the next iteration, so LIVE / TEST PATTERN / REPLAY
+/// all feed the identical statistics pipeline.
+#[derive(Debug, serde::Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum SourceRequest {
+    Infnoise,
+    InfnoiseRaw,
+    TestPattern,
+    Replay { path: String },
+}
+
+/// Switches the active byte source. The current source is terminated; the
+/// new one is opened by the reader thread within one retry cycle.
+#[tauri::command]
+pub fn set_source(
+    request: SourceRequest,
+    pipeline: tauri::State<'_, crate::stream::processor::StreamPipeline>,
+    state: tauri::State<'_, crate::state::StreamState>,
+) -> Result<(), String> {
+    let spec = match request {
+        SourceRequest::Infnoise => SourceSpec::Infnoise,
+        SourceRequest::InfnoiseRaw => SourceSpec::InfnoiseRaw,
+        SourceRequest::TestPattern => SourceSpec::TestPattern,
+        SourceRequest::Replay { path } => SourceSpec::Replay(std::path::PathBuf::from(path)),
+    };
+    state.set_source_spec(spec);
+    // Drop the active source so a blocked reader read returns immediately
+    // and the loop picks up the new spec (also kills infnoise when leaving
+    // live mode).
+    pipeline.drop_active_source();
+    Ok(())
 }
 
 #[cfg(test)]

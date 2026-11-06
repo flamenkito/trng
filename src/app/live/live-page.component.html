@@ -14,6 +14,11 @@
   @if (stream(); as s) {
     <section class="stats-bar">
       <span>Total received: <strong>{{ s.totalBytesReceived.toLocaleString('en-US') }}</strong> bytes</span>
+      <span>Queue:
+        <strong [class.bad]="s.pendingChunks > 100">
+          {{ s.pendingChunks.toLocaleString('en-US') }}
+        </strong> chunks
+      </span>
       <span>Application-dropped:
         <strong [class.bad]="s.applicationDroppedBytes > 0">
           {{ s.applicationDroppedBytes.toLocaleString('en-US') }}
@@ -25,6 +30,53 @@
     @if (s.lastError) {
       <p class="error-banner">⚠ {{ s.lastError }}</p>
     }
+
+    <section class="card">
+      <h2>Source</h2>
+      <div class="capture-row">
+        <button
+          type="button"
+          [class.selected-source]="activeSource() === 'infnoise'"
+          (click)="switchSource({ type: 'infnoise' })"
+        >
+          ● Live TRNG
+        </button>
+        <button
+          type="button"
+          [class.selected-source]="activeSource() === 'infnoiseRaw'"
+          (click)="switchSource({ type: 'infnoiseRaw' })"
+        >
+          Raw (experimental)
+        </button>
+        <button
+          type="button"
+          [class.selected-source]="activeSource() === 'testPattern'"
+          (click)="switchSource({ type: 'testPattern' })"
+        >
+          Test pattern
+        </button>
+        <input
+          class="replay-input"
+          type="text"
+          placeholder="/path/to/stream.bin"
+          [value]="replayPath()"
+          (input)="onReplayPath($event)"
+        />
+        <button
+          type="button"
+          [class.selected-source]="activeSource() === 'replay'"
+          [disabled]="!replayPath().trim()"
+          (click)="startReplay()"
+        >
+          ▶ Replay
+        </button>
+      </div>
+      <p class="capture-dir">
+        Replay feeds a captured stream.bin through the same statistics pipeline;
+        byte counter offsets are per-source. Raw source is unwhitened noise and
+        is not expected to look uniform.
+      </p>
+    </section>
 
     <section class="card">
       <div class="card-head">

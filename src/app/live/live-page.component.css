@@ -137,3 +137,20 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 button.danger { background: #3a1d1d; border-color: #6b2c2c; }
 button.danger:hover { background: #4a2424; }
+
+button.selected-source {
+  border-color: #4caf7d;
+  color: #d7dde3;
+}
+
+.replay-input {
+  flex: 1;
+  min-width: 220px;
+  background: #101418;
+  border: 1px solid #2c3844;
+  border-radius: 6px;
+  color: #d7dde3;
+  padding: 6px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}

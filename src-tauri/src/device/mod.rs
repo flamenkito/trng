@@ -6,9 +6,49 @@
 //! bounded channel.
 
 pub mod infnoise;
+pub mod replay;
 pub mod test_pattern;
 
 use std::io;
+use std::path::PathBuf;
+
+/// Which byte source the reader should open. Switchable at runtime via the
+/// `set_source` Tauri command so LIVE and REPLAY feed the same pipeline.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SourceSpec {
+    /// The physical TRNG via the `infnoise` subprocess (WHITENED).
+    Infnoise,
+    /// The unwhitened noise source (`infnoise --raw`). Experimental: the raw
+    /// source is not uniformly distributed and must not be read as one.
+    InfnoiseRaw,
+    /// Deterministic `00..FF` loop for development/tests.
+    TestPattern,
+    /// Replay a previously captured `stream.bin` through the same
+    /// statistics pipeline.
+    Replay(PathBuf),
+}
+
+impl SourceSpec {
+    /// Opens a source for this spec.
+    pub fn open(&self) -> Result<Box<dyn ByteSource>, String> {
+        match self {
+            SourceSpec::Infnoise => Ok(Box::new(infnoise::InfnoiseSource::spawn()?)),
+            SourceSpec::InfnoiseRaw => Ok(Box::new(infnoise::InfnoiseSource::spawn_raw()?)),
+            SourceSpec::TestPattern => Ok(Box::new(test_pattern::TestPatternSource::new())),
+            SourceSpec::Replay(path) => Ok(Box::new(replay::FileReplaySource::open(path)?)),
+        }
+    }
+
+    /// Conceptual data mode recorded in capture metadata.
+    pub fn mode_label(&self) -> &'static str {
+        match self {
+            SourceSpec::Infnoise => "whitened",
+            SourceSpec::InfnoiseRaw => "raw",
+            SourceSpec::TestPattern => "testpattern",
+            SourceSpec::Replay(_) => "replay",
+        }
+    }
+}
 
 /// One continuous byte stream.
 ///

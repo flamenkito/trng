@@ -33,7 +33,8 @@ pub fn run() {
       ipc::commands::get_backend_status,
       ipc::commands::request_test_event,
       ipc::commands::start_capture,
-      ipc::commands::stop_capture
+      ipc::commands::stop_capture,
+      ipc::commands::set_source
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")

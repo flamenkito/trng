@@ -28,6 +28,8 @@ export interface StreamStatus {
   captureBytesWritten: number;
   captureDir: string | null;
   captureError: string | null;
+  /** Depth of the bounded reader→processor queue; should stay near 0. */
+  pendingChunks: number;
   /** Distribution counts for every configured rolling window. */
   windows: WindowStats[];
 }

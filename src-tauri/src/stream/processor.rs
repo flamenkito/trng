@@ -26,8 +26,7 @@ use std::time::{Duration, Instant};
 use tauri::AppHandle;
 
 use crate::device::ByteSource;
-use crate::device::infnoise::InfnoiseSource;
-use crate::device::test_pattern::TestPatternSource;
+use crate::device::SourceSpec;
 use crate::ipc::events::{StreamStatusEvent, emit_stream_status};
 use crate::rolling::histogram::RollingHistogram;
 use crate::state::{DeviceStatus, StreamState};
@@ -50,6 +49,9 @@ const TICK_INTERVAL: Duration = Duration::from_millis(100);
 /// Handle to the running pipeline; shut down on application exit.
 pub struct StreamPipeline {
     shutdown: Arc<AtomicBool>,
+    /// Bumped by `drop_active_source()`; the reader compares against the
+    /// value captured when it opened its source and drops/reopens on change.
+    source_generation: Arc<std::sync::atomic::AtomicU64>,
     /// Currently open source. `stop()` drops it, which terminates the
     /// subprocess and unblocks a reader thread sitting in `read_chunk`.
     source_slot: Arc<Mutex<Option<Box<dyn ByteSource>>>>,
@@ -66,6 +68,15 @@ impl StreamPipeline {
         drop(self.source_slot.lock().unwrap().take());
     }
 
+    /// Drops the currently open source without shutting the pipeline down.
+    /// The reader's blocked read returns and it reopens from the current
+    /// `SourceSpec` — used by `set_source` to switch LIVE/TEST/REPLAY.
+    pub fn drop_active_source(&self) {
+        self.source_generation
+            .fetch_add(1, Ordering::Relaxed);
+        drop(self.source_slot.lock().unwrap().take());
+    }
+
     /// Waits for pipeline threads to finish. Call after [`stop`](Self::stop).
     pub fn join(&self) {
         let mut threads = self.threads.lock().unwrap();
@@ -75,20 +86,10 @@ impl StreamPipeline {
     }
 }
 
-/// Opens the configured byte source.
-///
-/// `TRNG_SOURCE=testpattern` selects the deterministic test source so the
-/// full pipeline can run without the physical TRNG attached.
-fn open_source() -> Result<Box<dyn ByteSource>, String> {
-    match std::env::var("TRNG_SOURCE").as_deref() {
-        Ok("testpattern") => Ok(Box::new(TestPatternSource::new())),
-        _ => Ok(Box::new(InfnoiseSource::spawn()?)),
-    }
-}
-
 /// Starts reader, processor, and status-ticker threads.
 pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
     let shutdown = Arc::new(AtomicBool::new(false));
+    let generation = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let source_slot: Arc<Mutex<Option<Box<dyn ByteSource>>>> = Arc::new(Mutex::new(None));
     let (tx, rx) = sync_channel::<StreamChunk>(CHANNEL_CAPACITY);
     let mut threads = Vec::new();
@@ -98,15 +99,18 @@ pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
         let state = state.clone();
         let shutdown = shutdown.clone();
         let source_slot = source_slot.clone();
+        let generation = generation.clone();
         threads.push(std::thread::Builder::new()
             .name("trng-reader".into())
             .spawn(move || {
                 let mut offset: u64 = 0;
                 while !shutdown.load(Ordering::Relaxed) {
                     state.set_status(DeviceStatus::Connecting);
-                    let source = match open_source() {
+                    let spec = state.source_spec();
+                    let source = match spec.open() {
                         Ok(source) => {
                             state.set_source(source.describe());
+                            state.set_source_mode(spec.mode_label());
                             state.clear_error();
                             state.set_status(DeviceStatus::Streaming);
                             source
@@ -120,38 +124,59 @@ pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
                         }
                     };
                     *source_slot.lock().unwrap() = Some(source);
+                    let generation_at_open = generation.load(Ordering::Relaxed);
 
                     let mut buf = vec![0u8; READ_BUFFER_SIZE];
                     loop {
                         if shutdown.load(Ordering::Relaxed) {
                             break;
                         }
-                        // Read through the shared slot so `stop()` can drop
-                        // the source and unblock this read during shutdown.
-                        let read = {
-                            let mut guard = source_slot.lock().unwrap();
-                            match guard.as_mut() {
-                                Some(source) => source
-                                    .read_chunk(&mut buf)
-                                    .map_err(|e| (e.to_string(), source.describe().to_string())),
-                                None => break,
-                            }
+                        // Check the source out for the duration of one read
+                        // only — never hold the slot lock across a blocking
+                        // read, or `stop()` / `drop_active_source()` would
+                        // deadlock waiting for it.
+                        let mut owned = source_slot.lock().unwrap().take();
+                        let Some(source) = owned.as_mut() else {
+                            break;
                         };
+                        let read = source
+                            .read_chunk(&mut buf)
+                            .map_err(|e| (e.to_string(), source.describe().to_string()));
                         match read {
                             Ok(0) => {
-                                let describe = source_slot
-                                    .lock()
-                                    .unwrap()
-                                    .as_ref()
-                                    .map(|s| s.describe().to_string())
-                                    .unwrap_or_else(|| "stream".to_string());
-                                *source_slot.lock().unwrap() = None;
+                                let was_replay = matches!(spec, SourceSpec::Replay(_));
+                                let describe = source.describe().to_string();
+                                // `owned` drops here, closing the source.
+                                if was_replay {
+                                    // A finished replay is a normal end state,
+                                    // not an error: park until the source spec
+                                    // changes instead of reopening the file.
+                                    state.set_status(DeviceStatus::Disconnected);
+                                    state.set_error(format!("replay finished: {describe}"));
+                                    loop {
+                                        std::thread::sleep(Duration::from_millis(500));
+                                        if shutdown.load(Ordering::Relaxed)
+                                            || state.source_spec() != spec
+                                        {
+                                            break;
+                                        }
+                                    }
+                                    break;
+                                }
                                 // Subprocess exited or finite test source done.
                                 state.set_status(DeviceStatus::Error);
                                 state.set_error(format!("stream from {describe} ended unexpectedly"));
                                 break;
                             }
                             Ok(n) => {
+                                // Source switch or shutdown requested while
+                                // reading: drop the source and reopen.
+                                if shutdown.load(Ordering::Relaxed)
+                                    || generation.load(Ordering::Relaxed) != generation_at_open
+                                {
+                                    break;
+                                }
+                                *source_slot.lock().unwrap() = owned;
                                 let chunk = StreamChunk {
                                     offset,
                                     data: buf[..n].to_vec(),
@@ -159,13 +184,16 @@ pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
                                 offset += n as u64;
                                 // Bounded channel: blocks under backpressure
                                 // rather than ever dropping a byte.
+                                let pending = state.pending_chunks() + 1;
+                                state.set_pending_chunks(pending);
                                 if tx.send(chunk).is_err() {
+                                    state.set_pending_chunks(state.pending_chunks().saturating_sub(1));
                                     break;
                                 }
                             }
                             Err(err) => {
                                 let (read_err, describe) = err;
-                                *source_slot.lock().unwrap() = None;
+                                // `owned` drops here, closing the source.
                                 state.set_status(DeviceStatus::Error);
                                 state.set_error(format!("read failed on {describe}: {read_err}"));
                                 break;
@@ -193,6 +221,7 @@ pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
                 let mut histogram = RollingHistogram::new(Instant::now());
                 let mut last_window_refresh = Instant::now();
                 while let Ok(chunk) = rx.recv() {
+                    state.set_pending_chunks(state.pending_chunks().saturating_sub(1));
                     let len = chunk.data.len() as u64;
                     let lost = verifier.check(chunk.offset, len);
                     if lost > 0 {
@@ -272,6 +301,7 @@ pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
                         capture_bytes_written: state.capture.bytes_written(),
                         capture_dir: state.capture.dir().map(|p| p.display().to_string()),
                         capture_error: state.capture.last_error(),
+                        pending_chunks: state.pending_chunks(),
                         windows: state.windows(),
                     };
                     if emit_stream_status(&app, &event).is_err() {
@@ -284,6 +314,7 @@ pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
 
     StreamPipeline {
         shutdown,
+        source_generation: generation,
         source_slot,
         threads: Mutex::new(threads),
     }

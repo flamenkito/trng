@@ -7,8 +7,9 @@ deviations from a uniform distribution in real time.
 Built with **Tauri 2** (Rust backend) + **Angular** (standalone components,
 signals, zoneless change detection, Canvas 2D for live visualization).
 
-> Status: **Milestone 2 — device spike.** Live TRNG streaming with exact
-> counters; no visualization or capture yet.
+> Status: **Milestones 1–9 complete.** Live TRNG streaming, lossless capture,
+> rolling-window distributions, deviation + heatmap visualization, replay,
+> and raw-source mode. Experiment markers and polish are future work.
 
 ## Device prerequisites (macOS)
 

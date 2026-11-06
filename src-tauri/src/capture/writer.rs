@@ -96,7 +96,7 @@ impl CaptureWriter {
     ///
     /// Creates `stream.bin` and an initial `metadata.json`; both are replaced
     /// atomically on finalization.
-    pub fn start(&self, captures_root: &Path) -> Result<PathBuf, String> {
+    pub fn start(&self, captures_root: &Path, source_mode: &str) -> Result<PathBuf, String> {
         if self.status() == CaptureStatus::Active {
             return Err("a capture is already active".to_string());
         }
@@ -121,7 +121,8 @@ impl CaptureWriter {
             .store(CaptureStatus::Active.as_u8(), std::sync::atomic::Ordering::Relaxed);
 
         // Initial metadata; rewritten on stop with final counters.
-        let meta = CaptureMetadata::started(now);
+        let mut meta = CaptureMetadata::started(now);
+        meta.source_mode = source_mode.to_string();
         meta.write_to(&dir)
             .map_err(|e| format!("cannot write metadata.json: {e}"))?;
 
@@ -217,7 +218,7 @@ mod tests {
         // appear in stream.bin byte-for-byte, in order, with nothing added.
         let root = temp_root("known-answer");
         let writer = CaptureWriter::new();
-        writer.start(&root).unwrap();
+        writer.start(&root, "whitened").unwrap();
 
         let mut expected: Vec<u8> = Vec::new();
         for round in 0..100u32 {
@@ -259,8 +260,8 @@ mod tests {
     fn double_start_is_rejected() {
         let root = temp_root("double-start");
         let writer = CaptureWriter::new();
-        writer.start(&root).unwrap();
-        assert!(writer.start(&root).is_err());
+        writer.start(&root, "whitened").unwrap();
+        assert!(writer.start(&root, "whitened").is_err());
         writer.stop().unwrap();
         std::fs::remove_dir_all(&root).ok();
     }
@@ -269,7 +270,7 @@ mod tests {
     fn partial_chunks_and_empty_chunks_are_handled() {
         let root = temp_root("partial");
         let writer = CaptureWriter::new();
-        writer.start(&root).unwrap();
+        writer.start(&root, "whitened").unwrap();
         writer.feed(&[]);
         writer.feed(&[0x00, 0xFF, 0x01, 0x01, 0x20]);
         writer.feed(&[]);
