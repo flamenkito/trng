@@ -22,6 +22,13 @@ export class HeatmapRenderer {
   /** Ring buffer of columns; each column is 256 z-scores. */
   private grid: Float32Array[] = [];
 
+  /**
+   * Experiment markers as column indices into the current grid. Indices
+   * shift left with the grid so a marker stays pinned to the moment it was
+   * recorded (e.g. "MAGNET_ON").
+   */
+  private markers: { col: number; label: string }[] = [];
+
   attach(canvas: HTMLCanvasElement): void {
     const dpr = window.devicePixelRatio || 1;
     const width = canvas.clientWidth;
@@ -44,7 +51,15 @@ export class HeatmapRenderer {
     this.grid.push(column);
     if (this.grid.length > this.columns) {
       this.grid.shift();
+      for (const m of this.markers) m.col -= 1;
+      this.markers = this.markers.filter((m) => m.col >= 0);
     }
+    this.dirty = true;
+  }
+
+  /** Pins a labeled marker at the current (rightmost) time position. */
+  addMarker(label: string): void {
+    this.markers.push({ col: this.grid.length - 1, label });
     this.dirty = true;
   }
 
@@ -99,6 +114,22 @@ export class HeatmapRenderer {
         ctx.fillStyle = `hsl(${hue} ${35 + strength * 55}% ${30 + strength * 45}%)`;
         ctx.fillRect(x, y, widthPx, heightPx);
       }
+    }
+
+    // Experiment markers: vertical lines pinned to the moment they were
+    // recorded, with the label at the top.
+    for (const m of this.markers) {
+      const x = Math.floor(m.col * cellW);
+      ctx.strokeStyle = '#c9a44a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, h);
+      ctx.stroke();
+      ctx.fillStyle = '#c9a44a';
+      ctx.font = '10px system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(m.label, x + 3, 10);
     }
   }
 }

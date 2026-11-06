@@ -31,6 +31,14 @@
       <p class="error-banner">⚠ {{ s.lastError }}</p>
     }
 
+    @if (sustainedAlert(); as a) {
+      <p class="alert-banner">
+        ⚠ SUSTAINED DEVIATION: byte 0x{{ a.bin.toString(16).padStart(2, '0').toUpperCase() }}
+        elevated (z ≈ {{ a.maxZ.toFixed(1) }}) for {{ (a.ticks / 10).toFixed(0) }}s —
+        possible external influence
+      </p>
+    }
+
     <section class="card">
       <h2>Source</h2>
       <div class="capture-row">
@@ -86,19 +94,46 @@
           (select)="onSelectWindow($event)"
         />
       </div>
-      <app-deviation-canvas [frame]="selectedFrame()" />
+      <app-deviation-canvas
+        [frames]="allFrames()"
+        [selectedMs]="selectedWindowMs()"
+      />
       <div class="axis">
         <span>0</span>
         <span>255</span>
       </div>
+      <p class="hint">
+        All windows overlaid in depth (1s front … 5m back). A flickering bin
+        lights up only in the front layers; real influence forms a ridge
+        through all of them. Selected window is drawn at full opacity.
+      </p>
     </section>
 
     <section class="card">
       <h2>History</h2>
-      <app-history-heatmap
+      <app-history-heatmap #heatmap
         [counts]="selectedFrame()?.counts ?? null"
         [samples]="selectedFrame()?.samples ?? 0"
       />
+      <app-deviation-timeline [values]="deviationTimeline()" />
+      <div class="capture-row marker-row">
+        <input
+          class="replay-input"
+          type="text"
+          placeholder="event label (e.g. MAGNET_ON)"
+          [value]="markerLabel()"
+          (input)="onMarkerLabel($event)"
+          (keydown.enter)="addMarker()"
+        />
+        <button type="button" (click)="addMarker()">⚑ Mark</button>
+      </div>
+      @if (markerLog().length > 0) {
+        <ul class="marker-log">
+          @for (m of markerLog(); track m.time + m.label) {
+            <li>{{ m.time }} — {{ m.label }}</li>
+          }
+        </ul>
+      }
     </section>
 
     <section class="card">

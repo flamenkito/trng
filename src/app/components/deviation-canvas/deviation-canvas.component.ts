@@ -24,7 +24,9 @@ import { DeviationRenderer } from '../../rendering/deviation-renderer';
   `,
 })
 export class DeviationCanvasComponent implements OnInit, OnDestroy {
-  readonly frame = input<DistributionFrame | null>(null);
+  /** One frame per rolling window, shortest first (rendered front to back). */
+  readonly frames = input<DistributionFrame[]>([]);
+  readonly selectedMs = input(1000);
   private readonly canvas =
     viewChild<ElementRef<HTMLCanvasElement>>('canvas');
 
@@ -33,7 +35,7 @@ export class DeviationCanvasComponent implements OnInit, OnDestroy {
   constructor() {
     // React to new frames outside the render loop: mark dirty only.
     effect(() => {
-      this.renderer.setFrame(this.frame());
+      this.renderer.setFrames(this.frames(), this.selectedMs());
       this.renderer.invalidate();
     });
   }

@@ -49,4 +49,9 @@ export class HistoryHeatmapComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.renderer.stop();
   }
+
+  /** Pins a labeled experiment marker at the current time position. */
+  markEvent(label: string): void {
+    this.renderer.addMarker(label);
+  }
 }

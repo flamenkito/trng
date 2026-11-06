@@ -123,6 +123,40 @@
   font-size: 13px;
 }
 
+.alert-banner {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  background: #3d2e14;
+  border: 1px solid #8a6a24;
+  border-radius: 6px;
+  color: #e8c56a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 8px 0 0;
+  color: #5f6e7a;
+  font-size: 11px;
+}
+
+.marker-row {
+  margin-top: 10px;
+}
+
+.marker-log {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  color: #8fa1b0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.marker-log li {
+  padding: 2px 0;
+}
+
 button {
   background: #223041;
   color: #d7dde3;
