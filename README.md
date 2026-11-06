@@ -7,7 +7,37 @@ deviations from a uniform distribution in real time.
 Built with **Tauri 2** (Rust backend) + **Angular** (standalone components,
 signals, zoneless change detection, Canvas 2D for live visualization).
 
-> Status: **Milestone 1 — project skeleton.** No TRNG integration yet.
+> Status: **Milestone 2 — device spike.** Live TRNG streaming with exact
+> counters; no visualization or capture yet.
+
+## Device prerequisites (macOS)
+
+The app drives the TRNG through the official `infnoise` executable
+(WHITENED mode, binary stdout).
+
+```bash
+brew install libftdi
+git clone https://github.com/waywardgeek/infnoise.git
+cd infnoise/software && make -f Makefile.darwin
+install_name_tool -add_rpath /opt/homebrew/opt/libftdi/lib infnoise
+install_name_tool -add_rpath /opt/homebrew/lib infnoise
+cp infnoise /opt/homebrew/bin/
+```
+
+> **Note on the Apple FTDI driver:** since macOS Catalina the Apple FTDI
+> driver is a DriverKit system extension that cannot be unloaded — but it
+> does *not* claim the device exclusively, so `infnoise`/`libftdi` work
+> alongside it. The historical `sudo kextunload` recipes are obsolete.
+>
+> **Note on sandboxes:** sandboxed processes get no USB device access and
+> `infnoise` fails with "Can't open Infinite Noise Multiplier". Run the app
+> unsandboxed (a normal Terminal is fine); no sudo needed.
+
+For development without the physical TRNG:
+
+```bash
+TRNG_SOURCE=testpattern npm run tauri dev   # deterministic 00..FF loop source
+```
 
 ## Development commands
 
@@ -45,20 +75,34 @@ src/                        Angular frontend
     core/
       tauri.service.ts      thin wrapper over the Tauri IPC bridge
                             (invoke + event listen, signal-based)
+      trng.service.ts       consumes `stream-status` snapshots into signals
+    models/
+      device-status.ts
+      stream-status.ts
   main.ts                   bootstrap (zoneless)
 
 src-tauri/                  Rust backend
   src/
     main.rs                 binary entry point
-    lib.rs                  Tauri builder, plugin + command registration
+    lib.rs                  Tauri builder, pipeline startup and shutdown
     ipc/
       mod.rs
       commands.rs           get_backend_status command
-      events.rs             backend-test-event emitter
+      events.rs             backend-test-event + stream-status emitters
+    device/
+      mod.rs                ByteSource trait (one authoritative stream reader)
+      infnoise.rs           infnoise subprocess source (whitened, binary)
+      test_pattern.rs       deterministic test source (00..FF loop)
+    stream/
+      mod.rs
+      counters.rs           exact byte counters + offset-integrity verifier
+      processor.rs          reader/processor/ticker threads, bounded channel,
+                            reconnect with visible error state
+    state.rs                shared stream state (status, errors, counters)
   tauri.conf.json           Tauri configuration
 ```
 
-Future modules (device/, stream/, rolling/, capture/) land in Milestones 2–4.
+Future modules (rolling/, capture/) land in Milestones 3–4.
 
 ## Architecture invariants (apply from Milestone 2 onward)
 

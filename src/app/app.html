@@ -1,8 +1,38 @@
 <main class="shell">
   <header class="header">
     <h1>Infinite Noise TRNG Visualizer</h1>
-    <span class="badge">MILESTONE 1 — SKELETON</span>
+    <span class="badge">MILESTONE 2 — DEVICE SPIKE</span>
   </header>
+
+  <section class="card">
+    <h2>Live stream</h2>
+    @if (stream(); as s) {
+      <div class="live-row">
+        <span class="live-dot" [class]="'live-dot ' + s.deviceStatus"></span>
+        <span class="live-status">{{ s.deviceStatus | uppercase }}</span>
+        <span class="live-source">{{ s.source }}</span>
+      </div>
+      <dl class="status-grid">
+        <dt>Total received</dt>
+        <dd>{{ s.totalBytesReceived.toLocaleString('en-US') }} bytes</dd>
+        <dt>Rate</dt>
+        <dd>{{ formatRate(s.bytesPerSecond) }}</dd>
+        <dt>Chunks processed</dt>
+        <dd>{{ s.chunksProcessed.toLocaleString('en-US') }}</dd>
+        <dt>Application-dropped</dt>
+        <dd [class.bad]="s.applicationDroppedBytes > 0">
+          {{ s.applicationDroppedBytes.toLocaleString('en-US') }} bytes
+        </dd>
+        <dt>Reconnects</dt>
+        <dd>{{ s.reconnectCount }}</dd>
+      </dl>
+      @if (s.lastError) {
+        <p class="error-banner">⚠ {{ s.lastError }}</p>
+      }
+    } @else {
+      <p>Waiting for stream status…</p>
+    }
+  </section>
 
   <section class="card">
     <h2>Backend status (Rust command)</h2>

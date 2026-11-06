@@ -80,6 +80,62 @@
   font-size: 13px;
 }
 
+.live-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #555;
+}
+
+.live-dot.streaming {
+  background: #4caf7d;
+  box-shadow: 0 0 6px #4caf7d;
+}
+
+.live-dot.connecting {
+  background: #d8a23c;
+}
+
+.live-dot.error {
+  background: #d9534f;
+}
+
+.live-dot.connected {
+  background: #4c9baf;
+}
+
+.live-status {
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.live-source {
+  color: #7c8a96;
+  font-size: 12px;
+}
+
+.bad {
+  color: #d9534f;
+  font-weight: 600;
+}
+
+.error-banner {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  background: #3a1d1d;
+  border: 1px solid #6b2c2c;
+  border-radius: 6px;
+  color: #e08e8a;
+  font-size: 13px;
+}
+
 button {
   background: #223041;
   color: #d7dde3;

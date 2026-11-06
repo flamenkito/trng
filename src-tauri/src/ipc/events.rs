@@ -1,6 +1,8 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
+use crate::state::DeviceStatus;
+
 /// Test event payload proving the backend -> frontend event path works.
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -46,4 +48,29 @@ pub fn emit_test_event_now(app: &AppHandle) {
             timestamp_ms: now_ms(),
         },
     );
+}
+
+pub const STREAM_STATUS_EVENT: &str = "stream-status";
+
+/// Snapshot of derived stream state, emitted at ~10 Hz.
+///
+/// This is presentation state only: the frontend may skip frames, but the
+/// underlying byte pipeline processes every received byte regardless.
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamStatusEvent {
+    pub device_status: DeviceStatus,
+    pub source: String,
+    pub total_bytes_received: u64,
+    pub bytes_per_second: f64,
+    /// Application-level drops only. This is NOT a claim about USB/FTDI/
+    /// driver-level integrity upstream of the application.
+    pub application_dropped_bytes: u64,
+    pub chunks_processed: u64,
+    pub reconnect_count: u64,
+    pub last_error: Option<String>,
+}
+
+pub fn emit_stream_status(app: &AppHandle, event: &StreamStatusEvent) -> tauri::Result<()> {
+    app.emit(STREAM_STATUS_EVENT, event)
 }
