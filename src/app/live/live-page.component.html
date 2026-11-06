@@ -1,0 +1,87 @@
+<main class="shell">
+  <header class="header">
+    <h1>Infinite Noise TRNG</h1>
+    @if (stream(); as s) {
+      <span class="live-row-header">
+        <span class="live-dot" [class]="s.deviceStatus"></span>
+        <span class="live-status">{{ s.deviceStatus | uppercase }}</span>
+        <span class="live-source">{{ s.source }}</span>
+        <span class="rate">{{ formatRate(s.bytesPerSecond) }}</span>
+      </span>
+    }
+  </header>
+
+  @if (stream(); as s) {
+    <section class="stats-bar">
+      <span>Total received: <strong>{{ s.totalBytesReceived.toLocaleString('en-US') }}</strong> bytes</span>
+      <span>Application-dropped:
+        <strong [class.bad]="s.applicationDroppedBytes > 0">
+          {{ s.applicationDroppedBytes.toLocaleString('en-US') }}
+        </strong>
+      </span>
+      <span>Reconnects: {{ s.reconnectCount }}</span>
+    </section>
+
+    @if (s.lastError) {
+      <p class="error-banner">⚠ {{ s.lastError }}</p>
+    }
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Distribution deviation</h2>
+        <app-window-selector
+          [selectedMs]="selectedWindowMs()"
+          (select)="onSelectWindow($event)"
+        />
+      </div>
+      <app-deviation-canvas [frame]="selectedFrame()" />
+      <div class="axis">
+        <span>0</span>
+        <span>255</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>History</h2>
+      <app-history-heatmap
+        [counts]="selectedFrame()?.counts ?? null"
+        [samples]="selectedFrame()?.samples ?? 0"
+      />
+    </section>
+
+    <section class="card">
+      <h2>Capture</h2>
+      <div class="capture-row">
+        @if (s.captureStatus === 'active') {
+          <button class="danger" (click)="stopCapture()" type="button">■ Stop capture</button>
+          <span class="capture-info">
+            Recording — {{ s.captureBytesWritten.toLocaleString('en-US') }} bytes
+          </span>
+        } @else {
+          <button
+            (click)="startCapture()"
+            type="button"
+            [disabled]="s.deviceStatus !== 'streaming'"
+          >
+            ● Start capture
+          </button>
+          <span class="capture-info">
+            @if (s.captureStatus === 'error') {
+              <span class="bad">capture failed</span>
+            } @else {
+              idle
+            }
+          </span>
+        }
+      </div>
+      @if (s.captureDir) {
+        <p class="capture-dir">{{ s.captureDir }}</p>
+      }
+      @if (s.captureError) {
+        <p class="error-banner">⚠ {{ s.captureError }}</p>
+      }
+    </section>
+  } @else {
+    <p>Connecting to backend…</p>
+  }
+</main>

@@ -29,6 +29,7 @@ use crate::device::ByteSource;
 use crate::device::infnoise::InfnoiseSource;
 use crate::device::test_pattern::TestPatternSource;
 use crate::ipc::events::{StreamStatusEvent, emit_stream_status};
+use crate::rolling::histogram::RollingHistogram;
 use crate::state::{DeviceStatus, StreamState};
 use crate::stream::counters::OffsetVerifier;
 
@@ -189,6 +190,8 @@ pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
             .name("trng-processor".into())
             .spawn(move || {
                 let mut verifier = OffsetVerifier::default();
+                let mut histogram = RollingHistogram::new(Instant::now());
+                let mut last_window_refresh = Instant::now();
                 while let Ok(chunk) = rx.recv() {
                     let len = chunk.data.len() as u64;
                     let lost = verifier.check(chunk.offset, len);
@@ -204,6 +207,15 @@ pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
                     // consumers (statistics, capture) have seen it.
                     state.counters.record_chunk(chunk.data.len());
                     state.capture.feed(&chunk.data);
+
+                    // Rolling distribution: every byte increments exactly one
+                    // histogram bin. Window snapshots are published for the
+                    // ticker at ~tick rate, not per chunk.
+                    histogram.record(Instant::now(), &chunk.data);
+                    if last_window_refresh.elapsed() >= TICK_INTERVAL {
+                        state.set_windows(histogram.all_windows(Instant::now()));
+                        last_window_refresh = Instant::now();
+                    }
                 }
             })
             .expect("spawn trng-processor"));
@@ -260,6 +272,7 @@ pub fn start(app: AppHandle, state: Arc<StreamState>) -> StreamPipeline {
                         capture_bytes_written: state.capture.bytes_written(),
                         capture_dir: state.capture.dir().map(|p| p.display().to_string()),
                         capture_error: state.capture.last_error(),
+                        windows: state.windows(),
                     };
                     if emit_stream_status(&app, &event).is_err() {
                         // Frontend not ready yet; next tick will carry the state.

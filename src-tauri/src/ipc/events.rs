@@ -2,6 +2,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::capture::writer::CaptureStatus;
+use crate::rolling::histogram::WindowStats;
 use crate::state::DeviceStatus;
 
 /// Test event payload proving the backend -> frontend event path works.
@@ -74,6 +75,8 @@ pub struct StreamStatusEvent {
     pub capture_bytes_written: u64,
     pub capture_dir: Option<String>,
     pub capture_error: Option<String>,
+    /// Distribution counts for every configured rolling window.
+    pub windows: Vec<WindowStats>,
 }
 
 pub fn emit_stream_status(app: &AppHandle, event: &StreamStatusEvent) -> tauri::Result<()> {

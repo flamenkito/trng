@@ -1,6 +1,13 @@
 import type { DeviceStatus } from './device-status';
 import type { CaptureStatus } from './capture-status';
 
+/** Exact per-value counts for one rolling window. */
+export interface WindowStats {
+  windowMs: number;
+  samples: number;
+  counts: number[];
+}
+
 /**
  * Snapshot of derived stream state, emitted by Rust at ~10 Hz.
  *
@@ -21,4 +28,6 @@ export interface StreamStatus {
   captureBytesWritten: number;
   captureDir: string | null;
   captureError: string | null;
+  /** Distribution counts for every configured rolling window. */
+  windows: WindowStats[];
 }

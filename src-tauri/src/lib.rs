@@ -1,6 +1,7 @@
 mod ipc;
 mod capture;
 mod device;
+mod rolling;
 mod state;
 mod stream;
 

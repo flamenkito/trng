@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use serde::Serialize;
 
 use crate::capture::writer::CaptureWriter;
+use crate::rolling::histogram::WindowStats;
 use crate::stream::counters::StreamCounters;
 
 /// Device/stream state exposed to the frontend.
@@ -50,6 +51,8 @@ pub struct StreamState {
     reconnect_count: AtomicU64,
     source: Mutex<String>,
     last_error: Mutex<Option<String>>,
+    /// Latest per-window distribution snapshots, refreshed by the processor.
+    windows: Mutex<Vec<WindowStats>>,
 }
 
 impl StreamState {
@@ -61,7 +64,18 @@ impl StreamState {
             reconnect_count: AtomicU64::new(0),
             source: Mutex::new("none".to_string()),
             last_error: Mutex::new(None),
+            windows: Mutex::new(Vec::new()),
         }
+    }
+
+    pub fn set_windows(&self, windows: Vec<WindowStats>) {
+        if let Ok(mut guard) = self.windows.lock() {
+            *guard = windows;
+        }
+    }
+
+    pub fn windows(&self) -> Vec<WindowStats> {
+        self.windows.lock().map(|g| g.clone()).unwrap_or_default()
     }
 
     pub fn status(&self) -> DeviceStatus {
